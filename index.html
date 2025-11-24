@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Orbita v6</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Marked.js for Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for XSS protection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        orbita: {
+                            bg: 'var(--bg-color)',       
+                            surface: 'var(--surface-color)',
+                            input: 'var(--input-bg)',
+                            text: 'var(--text-color)',
+                            secondary: 'var(--secondary-color)',
+                            border: 'var(--border-color)',
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    animation: { 
+                        'fade-in': 'fadeIn 0.4s ease-out', 
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'orbit-spin': 'spin 10s linear infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(10px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --accent: #C58F5E; 
+            --bg-blur: 0px; 
+            
+            /* Light Mode */
+            --bg-color: #F2F0EB; 
+            --surface-color: rgba(255, 255, 255, 0.95);
+            --input-bg: #F7F7F5;
+            --text-color: #2D2A26;
+            --secondary-color: #8C8880;
+            --border-color: #E0DDD5;
+            
+            /* Content Specific - Always Dark Code */
+            --code-bg: #1e1e1e;
+            --code-text: #d4d4d4;
+            --table-border: #E0DDD5;
+            --table-header: #F7F7F5;
+        }
+
+        .dark {
+            /* Dark Mode */
+            --bg-color: #18181B; 
+            --surface-color: rgba(34, 34, 38, 0.95);
+            --input-bg: #2C2C32;
+            --text-color: #EDEDED;
+            --secondary-color: #8B8B95;
+            --border-color: #333338;
+            
+            /* Content Specific */
+            --code-bg: #111113;
+            --code-text: #e0ddd5;
+            --table-border: #333338;
+            --table-header: #2C2C32;
+        }
+
+        body { 
+            -webkit-tap-highlight-color: transparent; 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            overflow-x: hidden;
+        }
+        
+        /* Helpers */
+        .text-accent { color: var(--accent) !important; }
+        .bg-accent { background-color: var(--accent) !important; }
+        .border-accent { border-color: var(--accent) !important; }
+
+        /* Cozy Card */
+        .cozy-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            border-radius: 16px;
+        }
+        .dark .cozy-card { box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--secondary-color); border-radius: 4px; opacity: 0.5; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        
+        #bg-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; background-size: cover; background-position: center;
+            opacity: 0; transition: opacity 0.5s ease, filter 0.3s ease;
+            filter: blur(var(--bg-blur));
+        }
+
+        /* Search Bottom Utility */
+        .search-bottom {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            width: 94%; max-width: 600px; z-index: 50;
+        }
+        
+        .typing-loader span { animation: typing 1s infinite alternate; }
+        @keyframes typing { 0% { opacity: 0.3; transform: translateY(0); } 100% { opacity: 1; transform: translateY(-3px); } }
+        
+        /* Chat Bubbles */
+        .chat-bubble-user { background-color: var(--accent); color: white; border-radius: 20px 20px 4px 20px; margin-left: auto; max-width: 85%; position: relative; }
+        .chat-bubble-ai { background-color: var(--surface-color); color: var(--text-color); border-radius: 20px 20px 20px 4px; margin-right: auto; max-width: 90%; border: 1px solid var(--border-color); position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        
+        /* Markdown Styles */
+        .chat-content pre {
+            background: var(--code-bg) !important;
+            color: var(--code-text) !important;
+            padding: 0; 
+            border-radius: 12px;
+            overflow-x: auto;
+            margin: 12px 0;
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+        .code-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; background: rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.75rem; color: rgba(255,255,255,0.6);
+        }
+        .chat-content code { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 0.85em; }
+        /* Inline code also dark in light mode for contrast */
+        .chat-content p code, .chat-content li code { 
+            background: rgba(0,0,0,0.05); 
+            padding: 2px 6px; border-radius: 6px; color: #C58F5E; font-weight: 600;
+        }
+        .dark .chat-content p code, .dark .chat-content li code {
+             background: rgba(255,255,255,0.1); color: #C58F5E;
+        }
+
+        .chat-content pre code { display: block; padding: 12px; background: transparent; color: inherit; border: none; }
+
+        /* Tables */
+        .table-wrapper { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 12px; margin: 12px 0; background: var(--surface-color); }
+        .chat-content table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .chat-content th, .chat-content td { padding: 10px 14px; border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); text-align: left; }
+        .chat-content th { background-color: var(--input-bg); font-weight: 600; }
+        .chat-content tr:last-child td { border-bottom: none; }
+        .chat-content tr td:last-child, .chat-content tr th:last-child { border-right: none; }
+
+        /* Images in chat */
+        .chat-image { max-width: 80%; margin-bottom: 4px; border-radius: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .dark .chat-image { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+        /* Toggle Switch */
+        .switch-checkbox { display: none; }
+        .switch-label {
+            position: relative; display: block; width: 44px; height: 24px;
+            background-color: var(--input-bg); border-radius: 9999px; cursor: pointer;
+            border: 1px solid var(--border-color); transition: background-color 0.3s ease;
+        }
+        .switch-label::after {
+            content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+            background-color: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .switch-checkbox:checked + .switch-label { background-color: var(--accent); border-color: var(--accent); }
+        .switch-checkbox:checked + .switch-label::after { transform: translateX(20px); }
+
+        /* File Badge */
+        .file-badge { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 12px; font-size: 0.85rem; color: var(--text-color); max-width: 200px; }
+
+        /* Color Input */
+        .color-input-wrapper { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; position: relative; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .color-input-wrapper input[type="color"] { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; padding: 0; margin: 0; cursor: pointer; border: none; outline: none; opacity: 1; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-accent selection:text-white">
+
+    <div id="bg-layer"></div>
+
+    <!-- FULL CHAT OVERLAY -->
+    <div id="fullChatOverlay" class="fixed inset-0 z-[90] bg-orbita-bg flex flex-col hidden animate-fade-in">
+        <!-- Chat Header -->
+        <div class="h-16 px-6 flex items-center justify-between bg-orbita-surface/80 backdrop-blur-md shrink-0 border-b border-transparent shadow-sm z-10">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleFullChat()" class="w-10 h-10 rounded-full hover:bg-orbita-input flex items-center justify-center text-orbita-text transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                <div>
+                    <h2 class="font-bold text-xl text-orbita-text leading-none tracking-tight">AI Чат</h2>
+                    <p class="text-[10px] text-orbita-secondary font-medium tracking-wider mt-1">GEMINI 2.5</p>
+                </div>
+            </div>
+            <button onclick="clearChatHistory()" class="w-10 h-10 rounded-full hover:bg-orbita-input text-orbita-secondary hover:text-red-500 transition-colors" title="Очистить"><i class="fa-regular fa-trash-can"></i></button>
+        </div>
+        
+        <!-- Chat Container -->
+        <div id="chatHistoryContainer" class="flex-grow overflow-y-auto p-4 md:p-6 bg-orbita-bg scroll-smooth pb-48 relative">
+            
+            <!-- Empty State Placeholder -->
+            <div id="chatEmptyState" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-0">
+                <div class="relative w-48 h-48 mb-6 flex items-center justify-center opacity-80">
+                    <!-- Outer Orbit (Increased contrast) -->
+                    <div class="absolute w-full h-full border border-orbita-text/30 rounded-full animate-orbit-spin"></div>
+                    <div class="absolute w-full h-full border border-dashed border-orbita-text/40 rounded-full animate-orbit-spin" style="animation-duration: 20s; animation-direction: reverse;"></div>
+                    
+                    <!-- Inner Circle -->
+                    <div class="absolute w-24 h-24 border-2 border-accent rounded-full animate-pulse-slow flex items-center justify-center bg-orbita-bg/10 backdrop-blur-sm">
+                         <div class="w-2 h-2 bg-accent rounded-full"></div>
+                    </div>
+                    
+                    <!-- Satellites -->
+                    <div class="absolute w-full h-full animate-orbit-spin" style="animation-duration: 6s;">
+                        <div class="w-3 h-3 bg-orbita-text rounded-full absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1.5 shadow-sm"></div>
+                    </div>
+                </div>
+                <!-- FUNNY TEXT HERE -->
+                <h3 class="text-xl font-bold tracking-[0.2em] font-mono text-orbita-text text-center opacity-80">ПОИСК СМЫСЛА<br>ЖИЗНИ...</h3>
+                <p class="text-[10px] mt-3 tracking-widest uppercase text-accent animate-pulse font-bold">...И КОТИКОВ 🐈</p>
+            </div>
+
+            <!-- Messages Layer -->
+            <div id="chatMessages" class="relative z-10 space-y-6"></div>
+
+            <!-- Loader -->
+            <div id="fullChatLoader" class="relative z-10 flex items-center gap-2 text-orbita-secondary text-sm font-medium typing-loader hidden my-4 pl-2">
+                 <div class="w-2 h-2 bg-accent rounded-full animate-bounce"></div>
+                 <div class="w-2 h-2 bg-accent rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                 <div class="w-2 h-2 bg-accent rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            </div>
+        </div>
+
+        <!-- Chat Input (Fixed at bottom) -->
+        <div class="absolute bottom-0 left-0 w-full p-4 md:p-6 bg-gradient-to-t from-orbita-bg via-orbita-bg/95 to-transparent z-[100]">
+            <div class="max-w-4xl mx-auto">
+                <div id="fullChatFilePreviewArea" class="hidden mb-3 pl-1">
+                    <div class="relative inline-block group animate-slide-up">
+                        <img id="fullChatFilePreviewImg" class="hidden h-16 w-16 rounded-xl object-cover border border-orbita-border shadow-md">
+                        <div id="fullChatFilePreviewGeneric" class="hidden file-badge shadow-md">
+                            <i class="fa-solid fa-file-lines text-accent text-lg"></i>
+                            <span id="fullChatFilePreviewName" class="truncate font-medium">file.txt</span>
+                        </div>
+                        <button onclick="clearFullChatFile()" class="absolute -top-2 -right-2 w-6 h-6 bg-orbita-surface text-orbita-text border border-orbita-border rounded-full flex items-center justify-center text-xs shadow-sm hover:scale-110 transition-transform"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                </div>
+
+                <div class="flex items-end gap-2 relative bg-orbita-surface p-2 rounded-[24px] shadow-lg border border-orbita-border">
+                    <input type="file" id="fullChatFileInput" class="hidden" accept="*/*" onchange="handleFullChatFileSelect(this)">
+                    <button onclick="document.getElementById('fullChatFileInput').click()" class="w-10 h-10 rounded-full text-orbita-secondary hover:text-accent hover:bg-orbita-input flex items-center justify-center transition-colors flex-shrink-0 mb-0.5" title="Прикрепить файл">
+                         <i class="fa-solid fa-paperclip text-lg"></i>
+                    </button>
+
+                    <textarea id="fullChatInput" rows="1" class="flex-grow py-2.5 px-2 bg-transparent border-0 focus:ring-0 focus:outline-none text-base text-orbita-text placeholder-orbita-secondary/60 resize-none max-h-32 leading-relaxed" placeholder="Сообщение..." oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"></textarea>
+                    
+                    <button onclick="handleFullChatSubmit()" class="w-10 h-10 rounded-full bg-accent text-white hover:brightness-110 flex items-center justify-center shadow-md transition-transform active:scale-95 flex-shrink-0 mb-0.5">
+                        <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOCUS MODE OVERLAY -->
+    <div id="focusOverlay" class="fixed inset-0 z-[100] bg-orbita-bg/95 backdrop-blur-xl flex flex-col items-center justify-center hidden animate-fade-in">
+        <button onclick="toggleFocusMode()" class="absolute top-6 right-6 w-12 h-12 rounded-2xl bg-orbita-surface border border-orbita-border flex items-center justify-center text-orbita-text hover:border-accent transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+        <div class="text-center w-full max-w-sm px-6">
+            <div class="relative w-64 h-64 mx-auto mb-8">
+                <svg class="w-full h-full transform -rotate-90">
+                    <circle cx="50%" cy="50%" r="46%" stroke="currentColor" stroke-width="8" fill="transparent" class="text-orbita-border" />
+                    <circle id="timerProgress" cx="50%" cy="50%" r="46%" stroke="currentColor" stroke-width="8" fill="transparent" stroke-dasharray="289" stroke-dashoffset="0" stroke-linecap="round" class="text-accent transition-all duration-1000" />
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span id="timerDisplay" class="text-5xl font-bold tabular-nums tracking-tight text-orbita-text">25:00</span>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-6 mb-10 bg-orbita-surface p-4 rounded-2xl border border-orbita-border w-fit mx-auto shadow-sm">
+                <button onclick="adjustTimer(-5)" class="w-12 h-12 rounded-xl bg-orbita-input text-orbita-text hover:bg-orbita-bg flex items-center justify-center text-lg transition-colors"><i class="fa-solid fa-minus"></i></button>
+                <span class="text-xs font-bold text-orbita-secondary uppercase">Мин</span>
+                <button onclick="adjustTimer(5)" class="w-12 h-12 rounded-xl bg-orbita-input text-orbita-text hover:bg-orbita-bg flex items-center justify-center text-lg transition-colors"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="timerAction('start')" id="timerStartBtn" class="bg-accent text-white h-14 rounded-2xl font-bold text-xl shadow-lg hover:brightness-105 hover:-translate-y-1 transition-all flex-grow active:scale-95">Старт</button>
+                <button onclick="timerAction('reset')" class="bg-orbita-surface text-orbita-text border border-orbita-border h-14 px-8 rounded-2xl font-medium hover:bg-orbita-border transition-colors active:scale-95">Сброс</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div class="flex-grow container mx-auto px-4 py-6 max-w-4xl relative z-10 flex flex-col pb-32">
+        <!-- HEADER (FIXED: justify-between + ml-auto for button group ensures they stay right even if logo is hidden) -->
+        <header class="flex justify-between items-center mb-8 select-none">
+            <div id="logoContainer">
+                <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-accent rounded-full shadow-sm"></div>
+                        <h1 class="text-2xl font-bold text-orbita-text tracking-tight">Orbita</h1>
+                    </div>
+                    <p id="dailyQuote" class="text-xs text-orbita-secondary mt-1 ml-5 font-medium opacity-80 cursor-pointer hover:text-accent transition-colors" onclick="refreshQuote()">...</p>
+                </div>
+            </div>
+            <!-- Added ml-auto here -->
+            <div class="flex items-center gap-3 ml-auto">
+                <button onclick="toggleFocusMode()" id="timerBtn" class="w-11 h-11 rounded-xl cozy-card flex items-center justify-center text-orbita-secondary hover:text-accent transition-all hover:scale-105" title="Таймер"><i class="fa-solid fa-stopwatch text-lg"></i></button>
+                <button onclick="toggleSidePanel()" id="hubBtn" class="w-11 h-11 rounded-xl cozy-card flex items-center justify-center text-orbita-secondary hover:text-accent transition-all hover:scale-105 relative" title="Хаб">
+                    <i class="fa-solid fa-inbox text-lg"></i>
+                    <span id="hubIndicator" class="hidden absolute top-3 right-3 w-2 h-2 bg-accent rounded-full border border-white"></span>
+                </button>
+                <button onclick="openSettings()" class="w-11 h-11 rounded-xl cozy-card flex items-center justify-center text-orbita-secondary hover:text-orbita-text hover:rotate-90 transition-all" title="Настройки"><i class="fa-solid fa-gear text-lg"></i></button>
+            </div>
+        </header>
+
+        <!-- SEARCH WRAPPER -->
+        <div id="searchContainerWrapper" class="relative z-50 transition-all duration-300">
+            <div class="w-full max-w-2xl mx-auto cozy-card transition-all hover:shadow-lg border border-orbita-border focus-within:border-accent">
+                <form id="searchForm" class="flex items-center px-5 py-4">
+                    <i id="searchIcon" class="fa-brands fa-google text-orbita-secondary text-xl mr-4"></i>
+                    <input type="text" id="searchInput" class="w-full text-lg bg-transparent outline-none border-none focus:ring-0 text-orbita-text placeholder-orbita-secondary/50 font-medium" placeholder="Поиск..." autocomplete="off">
+                </form>
+            </div>
+        </div>
+
+        <!-- TIPS CONTAINER (REMOVED BORDER & BACKGROUND) -->
+        <div id="tipsContainer" class="w-full text-center mt-2 mb-6 transition-opacity hidden">
+            <p id="tipText" class="text-[10px] text-orbita-secondary opacity-60 hover:opacity-100 transition-opacity cursor-default"></p>
+        </div>
+
+        <!-- AI LAB (Widget) -->
+        <section id="aiWidgetSection" class="mb-8 w-full">
+            <div class="cozy-card p-0.5 shadow-sm hover:shadow-md transition-shadow rounded-[20px]">
+                <div class="bg-orbita-input rounded-[18px] px-3 py-2"> 
+                    <div id="filePreviewArea" class="hidden mb-2 pl-1">
+                        <div class="relative inline-block group">
+                            <img id="filePreviewImg" class="hidden h-10 w-10 rounded-lg object-cover border border-orbita-border">
+                            <div id="filePreviewGeneric" class="hidden file-badge text-[10px] py-1 px-2">
+                                <i class="fa-solid fa-file text-accent"></i>
+                                <span id="filePreviewName" class="truncate max-w-[80px]">file</span>
+                            </div>
+                            <button onclick="clearFile()" class="absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] shadow-sm hover:scale-110 transition-transform"><i class="fa-solid fa-times"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-end gap-2">
+                        <div class="flex-shrink-0 mb-1">
+                            <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="handleFileSelect(this)">
+                            <button onclick="document.getElementById('fileInput').click()" class="w-8 h-8 rounded-xl text-orbita-secondary hover:text-orbita-text hover:bg-orbita-surface flex items-center justify-center transition-colors" title="Прикрепить">
+                                <i class="fa-solid fa-paperclip text-sm"></i>
+                            </button>
+                        </div>
+                        <textarea id="aiInput" rows="1" class="flex-grow py-2 bg-transparent border-0 focus:ring-0 focus:outline-none text-sm text-orbita-text placeholder-orbita-secondary/60 resize-none max-h-32 leading-relaxed pl-1" placeholder="Спроси что угодно..." oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"></textarea>
+                        <button onclick="handleAiSubmit()" class="w-9 h-9 rounded-xl bg-accent text-white hover:brightness-110 flex items-center justify-center shadow-sm flex-shrink-0 transition-all hover:-translate-y-0.5 mb-0.5">
+                            <i class="fa-solid fa-arrow-up text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="toggleFullChat()" class="w-full flex justify-between items-center px-4 py-2 mt-0.5 group" title="Перейти в полный чат">
+                    <span class="text-[11px] text-accent font-bold uppercase tracking-wide hover:underline">Перейти в полный чат</span>
+                    <i class="fa-solid fa-arrow-right text-[10px] text-accent"></i>
+                </button>
+
+                <div id="aiResultContainer" class="hidden mt-3 pt-3 border-t border-orbita-border/50 px-3 pb-3">
+                    <!-- Added padding here -->
+                    <div id="aiLoader" class="flex items-center gap-2 text-orbita-secondary text-xs font-medium typing-loader hidden mb-2 mt-2 px-1">
+                        <i class="fa-solid fa-circle-notch fa-spin text-accent"></i> <span>Думаю...</span>
+                    </div>
+                    <div id="aiOutput" class="hidden chat-content max-w-none mt-1 text-sm text-orbita-text leading-relaxed"></div>
+                    <img id="generatedImage" src="" class="hidden w-full rounded-xl mt-3 border border-orbita-border shadow-sm">
+                </div>
+            </div>
+        </section>
+
+        <!-- RESOURCES -->
+        <section class="flex-grow relative">
+            <div class="flex items-center gap-2 mb-5 overflow-x-auto no-scrollbar pt-2 pb-2">
+                <div id="categoryFilters" class="flex gap-2"></div>
+                <button onclick="promptNewCategory()" class="h-9 px-3 rounded-xl border border-orbita-border bg-orbita-surface text-orbita-secondary hover:text-accent hover:border-accent transition-all text-xs font-bold flex items-center gap-1 whitespace-nowrap"><i class="fa-solid fa-plus"></i></button>
+                <div class="flex-grow"></div>
+                <button onclick="toggleEditMode()" id="editModeBtn" class="h-9 w-9 flex items-center justify-center rounded-xl text-orbita-secondary hover:text-accent hover:bg-orbita-surface transition-all"><i class="fa-solid fa-pen text-xs"></i></button>
+            </div>
+            
+            <div id="resourceGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-10"></div>
+            
+            <div id="emptyState" class="hidden py-12 text-center">
+                <p class="text-sm text-orbita-secondary mb-3">Здесь пока пусто</p>
+                <button onclick="openModal()" class="text-accent font-bold text-sm hover:underline">Добавить</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div id="sidePanel" class="fixed top-0 right-0 h-full w-full md:w-[400px] bg-orbita-bg border-l border-orbita-border transform translate-x-full transition-transform duration-300 z-[60] shadow-2xl flex flex-col">
+        <div class="h-[64px] px-6 flex justify-between items-center bg-orbita-surface border-b border-orbita-border flex-shrink-0">
+            <h3 class="font-bold text-lg text-orbita-text">Хаб</h3>
+            <button onclick="toggleSidePanel()" class="w-9 h-9 rounded-xl hover:bg-orbita-input flex items-center justify-center transition-colors"><i class="fa-solid fa-times text-orbita-secondary"></i></button>
+        </div>
+        <div class="flex px-6 border-b border-orbita-border bg-orbita-surface flex-shrink-0 relative">
+            <button onclick="switchTab('notes')" id="tabNotes" class="flex-1 py-3 text-xs font-bold uppercase tracking-wide border-b-2 border-accent text-accent transition-colors">Заметки</button>
+            <button onclick="switchTab('todos')" id="tabTodos" class="flex-1 py-3 text-xs font-bold uppercase tracking-wide border-b-2 border-transparent text-orbita-secondary transition-colors">Задачи</button>
+            
+            <!-- DOWNLOAD NOTES BTN -->
+            <button onclick="downloadNotes()" class="absolute right-4 top-1/2 -translate-y-1/2 text-orbita-secondary hover:text-accent" title="Скачать заметки">
+                <i class="fa-solid fa-download"></i>
+            </button>
+        </div>
+        <div id="sidePanelContent" class="bg-orbita-bg flex-grow flex flex-col overflow-hidden">
+            <div id="viewNotes" class="tab-content flex-grow">
+                <textarea id="notesArea" class="w-full h-full p-6 bg-transparent resize-none outline-none text-sm leading-6 text-orbita-text placeholder-orbita-secondary/40 font-mono" placeholder="Ваши мысли..."></textarea>
+            </div>
+            <div id="viewTodos" class="tab-content hidden flex-col p-6 flex-grow overflow-y-auto">
+                <form id="todoForm" class="flex gap-2 mb-4 flex-shrink-0">
+                    <input type="text" id="todoInput" class="flex-grow px-3 py-2.5 rounded-xl border border-orbita-border bg-orbita-surface text-sm focus:outline-none focus:border-accent transition-all" placeholder="Новая задача..." autocomplete="off">
+                    <button type="submit" class="bg-accent text-white w-10 rounded-xl flex items-center justify-center hover:brightness-105 shadow-sm"><i class="fa-solid fa-plus"></i></button>
+                </form>
+                <div id="todoList" class="space-y-2 pb-4 overflow-y-auto flex-grow"></div>
+                <button onclick="clearCompletedTodos()" class="mt-auto text-xs text-orbita-secondary hover:text-red-500 py-3 w-full text-center border-t border-orbita-border flex-shrink-0">Очистить завершенные</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FLOAT BUTTON -->
+    <div id="floatBtnContainer" class="fixed bottom-8 right-8 z-40 transition-all duration-300">
+        <button onclick="openModal()" class="w-14 h-14 rounded-2xl bg-accent text-white flex items-center justify-center text-xl shadow-lg hover:scale-105 hover:-translate-y-1 transition-all">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </div>
+
+    <!-- ADD MODAL -->
+    <div id="addModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-orbita-bg w-full md:max-w-sm rounded-2xl shadow-2xl border border-orbita-border animate-slide-up overflow-hidden">
+            <div class="px-6 py-4 border-b border-orbita-border flex justify-between items-center bg-orbita-surface">
+                <h3 class="font-bold text-base text-orbita-text">Добавить</h3><button onclick="closeModal()" class="text-orbita-secondary hover:text-orbita-text"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <form id="addResourceForm" class="p-6 space-y-4">
+                <input type="url" id="resUrl" required placeholder="https://" class="w-full px-4 py-2.5 mt-1 rounded-xl border border-orbita-border bg-orbita-input focus:border-accent outline-none text-sm text-orbita-text" onblur="autoFillTitle()">
+                <input type="text" id="resTitle" required class="w-full px-4 py-2.5 mt-1 rounded-xl border border-orbita-border bg-orbita-input focus:border-accent outline-none text-sm text-orbita-text">
+                <select id="resCategory" class="w-full px-4 py-2.5 mt-1 rounded-xl border border-orbita-border bg-orbita-input focus:border-accent outline-none text-sm text-orbita-text"></select>
+                <button type="submit" class="w-full bg-accent text-white font-bold py-3 rounded-xl shadow-sm hover:brightness-105 mt-2 text-sm">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-orbita-bg w-full max-w-sm rounded-2xl shadow-2xl border border-orbita-border animate-slide-up overflow-hidden max-h-[85vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-orbita-border flex justify-between items-center bg-orbita-surface">
+                <h3 class="font-bold text-base text-orbita-text">Настройки</h3><button onclick="closeSettings()" class="text-orbita-secondary hover:text-orbita-text"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex flex-col flex-grow">
+                
+                <div class="space-y-4">
+                    <h4 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider">Вид</h4>
+                    
+                    <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">Поиск внизу</span>
+                        <input type="checkbox" id="searchPosToggle" class="switch-checkbox" onchange="saveSettings()"/>
+                        <label for="searchPosToggle" class="switch-label"></label>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                         <span class="text-sm font-medium text-orbita-text">Тёмная тема</span>
+                         <input type="checkbox" id="themeToggle" class="switch-checkbox" onchange="toggleTheme()"/>
+                         <label for="themeToggle" class="switch-label"></label>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 rounded-xl border border-orbita-border bg-orbita-surface">
+                        <span class="text-sm font-medium text-orbita-text">Цвет акцента</span>
+                        <div class="color-input-wrapper">
+                             <input type="color" id="accentColorInput" value="#C58F5E" onchange="updateAccent(this.value)">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                         <label class="text-xs font-bold text-orbita-secondary ml-1">Обои (Файл)</label>
+                         <div class="flex gap-2">
+                             <label class="flex-grow px-3 py-2.5 border border-orbita-border rounded-xl bg-orbita-input text-xs text-orbita-text cursor-pointer hover:border-accent transition-colors flex items-center justify-center">
+                                 <i class="fa-solid fa-image mr-2"></i> Выбрать фото
+                                 <input type="file" id="bgUpload" class="hidden" accept="image/*" onchange="handleBgUpload(this)">
+                             </label>
+                             <button onclick="clearBackground()" class="px-3 py-2 border border-orbita-border rounded-xl bg-orbita-surface text-xs hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
+                         </div>
+                         <div class="pt-1">
+                             <label class="text-xs font-bold text-orbita-secondary ml-1 block mb-1">Размытие фона</label>
+                             <input type="range" id="blurRange" min="0" max="20" step="1" value="0" class="w-full accent-[var(--accent)]" oninput="updateBlur(this.value)">
+                         </div>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <h4 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider">Система</h4>
+                    <div>
+                        <label class="text-xs font-bold text-orbita-secondary ml-1">DNS / Proxy (Экспериментально)</label>
+                        <input type="text" id="dnsInput" class="w-full px-4 py-3 border border-orbita-border rounded-xl bg-orbita-input text-xs focus:border-accent outline-none text-orbita-text font-mono" placeholder="dns.google" onchange="saveSettings()">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-orbita-secondary ml-1">Поисковик</label>
+                        <select id="searchEngineInput" onchange="saveSettings()" class="w-full px-3 py-2.5 mt-1 border border-orbita-border rounded-xl bg-orbita-input text-xs focus:border-accent outline-none text-orbita-text">
+                            <option value="google">Google</option>
+                            <option value="yandex">Yandex</option>
+                            <option value="bing">Bing</option>
+                            <option value="ddg">DuckDuckGo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-orbita-secondary ml-1">Gemini API Key</label>
+                        <input type="password" id="geminiKeyInput" class="w-full px-4 py-3 border border-orbita-border rounded-xl bg-orbita-input text-xs focus:border-accent outline-none text-orbita-text font-mono" placeholder="Вставьте ваш API ключ..." onchange="saveSettings()">
+                        <p class="text-[10px] text-orbita-secondary mt-1">Оставьте пустым для отключения AI.</p>
+                    </div>
+
+                    <!-- Visibility Settings (Fixed Logic: ON = Visible) -->
+                    <h4 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider pt-2 mt-4">Видимость элементов</h4>
+                    
+                    <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">Логотип и цитата</span>
+                        <input type="checkbox" id="showLogoToggle" class="switch-checkbox" onchange="saveSettings()">
+                        <label for="showLogoToggle" class="switch-label"></label>
+                    </div>
+                     <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">Кнопка Таймера</span>
+                        <input type="checkbox" id="showTimerToggle" class="switch-checkbox" onchange="saveSettings()">
+                        <label for="showTimerToggle" class="switch-label"></label>
+                    </div>
+                     <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">Кнопка Хаба</span>
+                        <input type="checkbox" id="showHubToggle" class="switch-checkbox" onchange="saveSettings()">
+                        <label for="showHubToggle" class="switch-label"></label>
+                    </div>
+                     <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">AI Виджет</span>
+                        <input type="checkbox" id="showAiWidgetToggle" class="switch-checkbox" onchange="saveSettings()">
+                        <label for="showAiWidgetToggle" class="switch-label"></label>
+                    </div>
+                    <div class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border">
+                        <span class="text-sm font-medium text-orbita-text">Подсказки</span>
+                        <input type="checkbox" id="showHintsToggle" class="switch-checkbox" onchange="saveSettings()"/>
+                        <label for="showHintsToggle" class="switch-label"></label>
+                   </div>
+                </div>
+                
+                <div class="space-y-4 pt-2 border-t border-orbita-border">
+                    <h4 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider">Связь</h4>
+                    <a href="https://boosty.to/kageno_qq/donate" target="_blank" class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border hover:border-accent transition-colors">
+                        <span class="text-sm font-medium text-orbita-text flex items-center gap-2"><i class="fa-solid fa-hand-holding-heart text-accent"></i>Поддержать (Boosty)</span>
+                        <i class="fa-solid fa-arrow-right text-orbita-secondary"></i>
+                    </a>
+                    <a href="https://t.me/akairo_tg" target="_blank" class="flex items-center justify-between bg-orbita-surface p-3 rounded-xl border border-orbita-border hover:border-accent transition-colors">
+                        <span class="text-sm font-medium text-orbita-text flex items-center gap-2"><i class="fa-brands fa-telegram text-blue-400"></i>Telegram</span>
+                        <i class="fa-solid fa-arrow-right text-orbita-secondary"></i>
+                    </a>
+                </div>
+
+                <div class="flex gap-2 pt-2 border-t border-orbita-border">
+                    <button onclick="exportData()" class="flex-1 py-3 bg-orbita-surface rounded-xl text-xs font-bold border border-orbita-border hover:bg-orbita-input transition-colors text-orbita-text">Бэкап</button>
+                    <label class="flex-1 py-3 bg-orbita-surface rounded-xl text-xs font-bold border border-orbita-border hover:bg-orbita-input transition-colors text-center cursor-pointer text-orbita-text">Восстановить<input type="file" id="importFile" class="hidden" onchange="importData(this)"></label>
+                </div>
+
+                <button onclick="resetSettings()" class="w-full py-3 bg-red-500 text-white font-bold rounded-xl text-xs hover:bg-red-600 transition-colors mt-2">Сброс настроек</button>
+                
+                <!-- ABOUT INFO TRIGGER -->
+                <div class="text-center mt-4">
+                    <p onclick="openAboutModal()" class="text-[10px] text-orbita-secondary opacity-50 hover:opacity-100 hover:text-accent cursor-pointer transition-all p-1">
+                        О проекте Orbita &copy; 2025
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABOUT MODAL (REWORKED) -->
+    <div id="aboutModal" class="hidden fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-orbita-bg w-full max-w-sm rounded-2xl shadow-2xl border border-orbita-border animate-slide-up overflow-hidden">
+            <div class="px-6 py-4 border-b border-orbita-border flex justify-between items-center bg-orbita-surface">
+                <h3 class="font-bold text-base text-orbita-text">Сведения о системе</h3><button onclick="document.getElementById('aboutModal').classList.add('hidden')" class="text-orbita-secondary hover:text-orbita-text"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-5 text-sm text-orbita-text leading-relaxed overflow-y-auto max-h-[60vh]">
+                <div class="flex items-center gap-4 mb-2">
+                    <div class="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-white text-xl shadow-lg"><i class="fa-solid fa-rocket"></i></div>
+                    <div>
+                        <h4 class="font-bold text-lg leading-tight">Orbita OS</h4>
+                        <p class="text-[11px] font-mono text-orbita-secondary">Version 6.0.0 (Stable)</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <p class="text-xs text-red-500 font-bold flex items-start gap-2">
+                        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                        <span>Внимание: AI функции (Gemini) недоступны на территории РФ без использования VPN.</span>
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <h5 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider border-b border-orbita-border pb-1">Что нового?</h5>
+                     <p class="text-xs text-orbita-text opacity-90">
+                        • Улучшен интерфейс настроек (адаптивная шапка)<br>
+                        • Новая анимация "Поиск смысла жизни..."<br>
+                        • Автоперевод ошибок API
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <h5 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider border-b border-orbita-border pb-1">Хранилище</h5>
+                    <p class="text-xs text-orbita-text opacity-90">
+                        Все ваши данные (ссылки, задачи, заметки) хранятся <span class="font-bold">локально</span> в вашем браузере (LocalStorage). Мы не передаем их на сервера.
+                    </p>
+                    <p class="text-[10px] text-orbita-secondary italic">Рекомендуется регулярно делать бэкап в настройках.</p>
+                </div>
+                
+                 <div class="space-y-2">
+                    <h5 class="text-xs font-bold text-orbita-secondary uppercase tracking-wider border-b border-orbita-border pb-1">Как открыть это окно?</h5>
+                    <p class="text-xs text-orbita-text opacity-90">
+                        Настройки <i class="fa-solid fa-gear text-[10px] mx-1"></i> -> Спуститесь в самый низ -> Нажмите на "О проекте Orbita".
+                    </p>
+                </div>
+
+                <div class="pt-2 text-[10px] text-center text-orbita-secondary">
+                    Designed & Developed by Akario <br>
+                    2025 All Rights Reserved.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        const KEYS = { RES: 'orbita_v6_res', SET: 'orbita_v6_set', NOTES: 'orbita_v6_notes', TODOS: 'orbita_v6_todos', CATS: 'orbita_v6_cats', CHAT: 'orbita_v6_chat', VISITED: 'orbita_v6_visited' };
+        // SECURITY FIX: Removed Hardcoded API Key.
+        const DEFAULT_API_KEY = ""; 
+
+        const state = {
+            category: 'all',
+            editMode: false,
+            // Separate state for full chat and widget file handling to prevent ghosting
+            currentImageBase64: null,
+            currentImageMime: null,
+            currentFileName: null,
+            categories: [{id:'all', label:'Все'}],
+            resources: [],
+            todos: [],
+            chatHistory: [],
+            settings: { 
+                theme: 'light', bgImage: '', blur: 0, accent: '#C58F5E', 
+                searchEngine: 'google', apiKey: '', searchPos: 'top',
+                // Visibility toggles - Default TRUE (Visible)
+                showLogo: true, showTimer: true, showHub: true, showAiWidget: true, showHints: true,
+                dns: '' // New setting
+            },
+            timer: { time: 25*60, initial: 25*60, active: false, interval: null }
+        };
+
+        const placeholders = ["Спроси что угодно...", "Нарисуй...", "Код на Python...", "Таблица расходов..."];
+        const tips = [
+            "Вы можете сделать бэкап настроек и открыть их на ПК.",
+            "Нажмите на логотип, чтобы сменить цитату дня.",
+            "AI функции требуют VPN в некоторых регионах.",
+            "Двойной клик по таймеру откроет Focus Mode.",
+            "Перетаскивайте ссылки в режиме редактирования."
+        ];
+        let phIndex = 0;
+        let tipIndex = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            refreshQuote();
+            setupDragAndDrop();
+            updateTimerDisplay(state.timer.time);
+            checkFirstVisit();
+            
+            // Placeholder rotation
+            setInterval(() => {
+                const input = document.getElementById('aiInput');
+                if (document.activeElement !== input && !input.value) {
+                    phIndex = (phIndex + 1) % placeholders.length;
+                    input.placeholder = placeholders[phIndex];
+                }
+            }, 3000);
+
+            // Tips rotation
+            rotateTips();
+            setInterval(rotateTips, 10000);
+        });
+
+        function checkFirstVisit() {
+            if (!localStorage.getItem(KEYS.VISITED)) {
+                openAboutModal();
+                localStorage.setItem(KEYS.VISITED, 'true');
+            }
+        }
+
+        function rotateTips() {
+            const container = document.getElementById('tipsContainer');
+            if(!state.settings.showHints) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            const el = document.getElementById('tipText');
+            el.style.opacity = '0';
+            setTimeout(() => {
+                el.innerText = tips[tipIndex];
+                el.style.opacity = '1';
+                tipIndex = (tipIndex + 1) % tips.length;
+            }, 300);
+        }
+
+        function loadData() {
+            state.resources = JSON.parse(localStorage.getItem(KEYS.RES)) || [];
+            state.todos = JSON.parse(localStorage.getItem(KEYS.TODOS)) || [];
+            state.categories = JSON.parse(localStorage.getItem(KEYS.CATS)) || [{id:'all', label:'Все'}];
+            state.chatHistory = JSON.parse(localStorage.getItem(KEYS.CHAT)) || [];
+            const s = JSON.parse(localStorage.getItem(KEYS.SET));
+            if(s) state.settings = { ...state.settings, ...s };
+            
+            // Migration logic
+            if (s && typeof s.hideLogo !== 'undefined') {
+                state.settings.showLogo = !s.hideLogo;
+                state.settings.showTimer = !s.hideTimer;
+                state.settings.showHub = !s.hideHub;
+                state.settings.showAiWidget = !s.hideAiWidget;
+                delete state.settings.hideLogo; delete state.settings.hideTimer;
+                delete state.settings.hideHub; delete state.settings.hideAiWidget;
+            }
+
+            // Removed fallback to DEFAULT_API_KEY if empty, for security.
+            applyAllSettings();
+            document.getElementById('notesArea').value = localStorage.getItem(KEYS.NOTES) || '';
+            updateHubIndicator();
+            renderUI();
+        }
+
+        function saveData(type) {
+            if(type === 'res') localStorage.setItem(KEYS.RES, JSON.stringify(state.resources));
+            if(type === 'todos') { localStorage.setItem(KEYS.TODOS, JSON.stringify(state.todos)); updateHubIndicator(); }
+            if(type === 'settings') localStorage.setItem(KEYS.SET, JSON.stringify(state.settings));
+            if(type === 'notes') { localStorage.setItem(KEYS.NOTES, document.getElementById('notesArea').value); updateHubIndicator(); }
+            if(type === 'cats') localStorage.setItem(KEYS.CATS, JSON.stringify(state.categories));
+            if(type === 'chat') localStorage.setItem(KEYS.CHAT, JSON.stringify(state.chatHistory));
+        }
+
+        function resetSettings() {
+            if (window.confirm("Вы уверены? Это удалит все настройки и чат.")) {
+                localStorage.removeItem(KEYS.SET);
+                localStorage.removeItem(KEYS.CHAT);
+                localStorage.removeItem(KEYS.VISITED);
+                location.reload();
+            }
+        }
+
+        function applyAllSettings() {
+            const s = state.settings;
+            document.documentElement.classList.toggle('dark', s.theme === 'dark');
+            document.documentElement.style.setProperty('--accent', s.accent);
+            document.documentElement.style.setProperty('--bg-blur', s.blur + 'px');
+            
+            const bgLayer = document.getElementById('bg-layer');
+            if(s.bgImage) { bgLayer.style.backgroundImage = `url('${s.bgImage}')`; bgLayer.style.opacity = '1'; } 
+            else { bgLayer.style.opacity = '0'; }
+
+            const searchCont = document.getElementById('searchContainerWrapper');
+            const floatBtn = document.getElementById('floatBtnContainer');
+            if(s.searchPos === 'bottom') {
+                searchCont.className = 'search-bottom transition-all duration-500 ease-in-out';
+                floatBtn.style.bottom = '110px'; 
+            } else {
+                searchCont.className = 'mb-6 relative z-50 transition-all duration-500 ease-in-out';
+                floatBtn.style.bottom = '32px'; 
+            }
+            
+            // Logic: if SHOW is true, remove 'hidden'. If SHOW is false, add 'hidden'
+            document.getElementById('logoContainer').classList.toggle('hidden', !s.showLogo);
+            document.getElementById('timerBtn')?.classList.toggle('hidden', !s.showTimer);
+            document.getElementById('hubBtn')?.classList.toggle('hidden', !s.showHub);
+            document.getElementById('aiWidgetSection')?.classList.toggle('hidden', !s.showAiWidget);
+
+            // Sync Inputs
+            document.getElementById('searchPosToggle').checked = s.searchPos === 'bottom';
+            document.getElementById('themeToggle').checked = s.theme === 'dark';
+            // Only show user key if it exists
+            document.getElementById('geminiKeyInput').value = s.apiKey || ''; 
+            document.getElementById('accentColorInput').value = s.accent;
+            document.getElementById('searchEngineInput').value = s.searchEngine;
+            document.getElementById('blurRange').value = s.blur;
+            document.getElementById('dnsInput').value = s.dns || '';
+            
+            // Visibility Toggles (Checked = Visible)
+            document.getElementById('showLogoToggle').checked = s.showLogo;
+            document.getElementById('showTimerToggle').checked = s.showTimer;
+            document.getElementById('showHubToggle').checked = s.showHub;
+            document.getElementById('showAiWidgetToggle').checked = s.showAiWidget;
+            document.getElementById('showHintsToggle').checked = s.showHints;
+
+            const iconMap = { google: 'google', yandex: 'yandex', bing: 'microsoft', ddg: 'chrome' };
+            document.getElementById('searchIcon').className = `text-orbita-secondary text-xl mr-4 transition-colors fa-brands fa-${iconMap[s.searchEngine] || 'google'}`;
+            
+            rotateTips(); // Re-render tips visibility immediately
+        }
+
+        function saveSettings() {
+            const keyInput = document.getElementById('geminiKeyInput').value.trim();
+            // Allow saving empty key to clear it
+            state.settings.apiKey = keyInput;
+
+            state.settings.searchPos = document.getElementById('searchPosToggle').checked ? 'bottom' : 'top';
+            state.settings.searchEngine = document.getElementById('searchEngineInput').value;
+            state.settings.dns = document.getElementById('dnsInput').value;
+            
+            // Logic: Checked = Visible (True)
+            state.settings.showLogo = document.getElementById('showLogoToggle').checked;
+            state.settings.showTimer = document.getElementById('showTimerToggle').checked;
+            state.settings.showHub = document.getElementById('showHubToggle').checked;
+            state.settings.showAiWidget = document.getElementById('showAiWidgetToggle').checked;
+            state.settings.showHints = document.getElementById('showHintsToggle').checked;
+
+            saveData('settings'); applyAllSettings();
+        }
+
+        function toggleTheme() {
+            state.settings.theme = document.getElementById('themeToggle').checked ? 'dark' : 'light';
+            saveData('settings'); applyAllSettings();
+        }
+
+        function updateAccent(val) { state.settings.accent = val; saveData('settings'); applyAllSettings(); }
+        function updateBlur(val) { state.settings.blur = val; saveData('settings'); applyAllSettings(); }
+        function openAboutModal() { document.getElementById('aboutModal').classList.remove('hidden'); }
+        
+        function handleBgUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => { state.settings.bgImage = e.target.result; saveData('settings'); applyAllSettings(); };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function clearBackground() { state.settings.bgImage = ''; saveData('settings'); applyAllSettings(); }
+
+        // --- UI ---
+        function renderUI() {
+            // Render Categories with Delete Button in Edit Mode
+            document.getElementById('categoryFilters').innerHTML = state.categories.map(cat => {
+                const isAll = cat.id === 'all';
+                const deleteBtn = (state.editMode && !isAll) 
+                    ? `<button onclick="deleteCategory('${cat.id}', event)" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10"><i class="fa-solid fa-times text-[9px]"></i></button>`
+                    : '';
+                
+                return `
+                <div class="relative group">
+                    <button onclick="setCategory('${cat.id}')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center ${state.category === cat.id ? 'bg-accent text-white shadow-sm' : 'bg-orbita-surface text-orbita-secondary border border-orbita-border hover:text-orbita-text'}">
+                        <span>${cat.label}</span>
+                    </button>
+                    ${deleteBtn}
+                </div>
+            `}).join('');
+
+            document.getElementById('resCategory').innerHTML = state.categories.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+
+            const grid = document.getElementById('resourceGrid');
+            const empty = document.getElementById('emptyState');
+            const filtered = state.category === 'all' ? state.resources : state.resources.filter(r => r.category === state.category);
+            
+            if(filtered.length === 0) { grid.classList.add('hidden'); empty.classList.remove('hidden'); }
+            else {
+                grid.classList.remove('hidden'); empty.classList.add('hidden');
+                grid.innerHTML = filtered.map(res => {
+                    const isUrlIcon = res.icon && res.icon.startsWith('http');
+                    const iconHtml = isUrlIcon 
+                        ? `<img src="${res.icon}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='';this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')"><i class="fa-solid fa-globe text-xl hidden"></i>` 
+                        : `<i class="${res.icon || 'fa-solid fa-globe'} text-xl"></i>`;
+                        
+                    return `
+                    <div class="relative group resource-card" draggable="${state.editMode}" data-id="${res.id}">
+                        <a href="${res.url}" target="_blank" class="block h-full cozy-card p-4 hover:border-accent transition-all flex flex-col items-center text-center gap-3 active:scale-95 cursor-pointer">
+                            <div class="w-12 h-12 rounded-xl bg-orbita-bg flex items-center justify-center text-orbita-text group-hover:text-accent transition-all overflow-hidden p-0">
+                                ${iconHtml}
+                            </div>
+                            <div><h3 class="font-bold text-xs text-orbita-text line-clamp-1">${res.title}</h3></div>
+                        </a>
+                        ${state.editMode ? `<button onclick="deleteResource(${res.id})" class="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500 text-white z-20 shadow-sm flex items-center justify-center"><i class="fa-solid fa-times text-[10px]"></i></button>` : ''}
+                    </div>
+                `}).join('');
+                if(state.editMode) setupDragAndDrop();
+            }
+
+            document.getElementById('todoList').innerHTML = state.todos.map(t => `
+                <div class="flex items-start gap-3 p-3 rounded-xl bg-orbita-input border border-orbita-border group">
+                    <div onclick="toggleTodo(${t.id})" class="mt-0.5 w-5 h-5 rounded border ${t.done ? 'bg-accent border-accent' : 'border-orbita-secondary'} flex items-center justify-center cursor-pointer flex-shrink-0">
+                        ${t.done ? '<i class="fa-solid fa-check text-white text-[10px]"></i>' : ''}
+                    </div>
+                    <span class="text-xs flex-grow ${t.done ? 'line-through text-orbita-secondary opacity-60' : 'text-orbita-text font-medium'} break-all pt-0.5">${t.text}</span>
+                    <button onclick="deleteTodo(${t.id})" class="text-orbita-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                </div>
+            `).join('');
+        }
+
+        // --- AI LOGIC (FIXED) ---
+        function setAttachment(file, fromFullChat = false) {
+            if (!file) return;
+            state.currentFileName = file.name;
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                state.currentImageBase64 = e.target.result.split(',')[1];
+                state.currentImageMime = file.type;
+                const isImage = file.type.startsWith('image/');
+                
+                const pfx = fromFullChat ? 'fullChatFilePreview' : 'filePreview';
+                const otherPfx = fromFullChat ? 'filePreview' : 'fullChatFilePreview';
+                
+                const img = document.getElementById(pfx+'Img');
+                const gen = document.getElementById(pfx+'Generic');
+                const name = document.getElementById(pfx+'Name');
+                
+                if(isImage) { img.src = e.target.result; img.classList.remove('hidden'); gen.classList.add('hidden'); }
+                else { name.textContent = file.name; gen.classList.remove('hidden'); gen.style.display = 'flex'; img.classList.add('hidden'); }
+                document.getElementById(pfx+'Area').classList.remove('hidden');
+                document.getElementById(otherPfx+'Area').classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearFile() {
+            state.currentImageBase64 = null; state.currentImageMime = null; state.currentFileName = null;
+            document.getElementById('filePreviewArea').classList.add('hidden');
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fullChatFilePreviewArea').classList.add('hidden');
+            document.getElementById('fullChatFileInput').value = '';
+        }
+        
+        function handleFileSelect(i) { setAttachment(i.files[0], false); }
+        function handleFullChatFileSelect(i) { setAttachment(i.files[0], true); } 
+        function clearFullChatFile() { clearFile(); }
+
+        function decorateAiContent(container) {
+            container.querySelectorAll('pre').forEach(pre => {
+                if (pre.querySelector('.code-wrapper')) return;
+                const codeEl = pre.querySelector('code');
+                const langClass = codeEl ? Array.from(codeEl.classList).find(c => c.startsWith('language-')) : '';
+                const lang = langClass ? langClass.replace('language-', '') : 'text';
+                
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-wrapper border border-orbita-border rounded-xl overflow-hidden my-3 bg-[var(--code-bg)]';
+                
+                const header = document.createElement('div');
+                header.className = 'code-header';
+                header.innerHTML = `
+                    <span class="font-bold uppercase tracking-wider text-[10px] text-gray-400">${lang}</span>
+                    <div class="flex gap-2">
+                        <button onclick="copyCode(this)" class="hover:text-white transition-colors"><i class="fa-regular fa-copy"></i></button>
+                        <button onclick="downloadCode(this, '${lang}')" class="hover:text-white transition-colors"><i class="fa-solid fa-download"></i></button>
+                    </div>
+                `;
+                
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(header);
+                pre.style.margin = '0'; pre.style.border = 'none'; pre.style.borderRadius = '0';
+                wrapper.appendChild(pre);
+            });
+
+            container.querySelectorAll('table').forEach(table => {
+                if(table.parentElement.classList.contains('table-wrapper')) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'table-wrapper relative group';
+                table.parentNode.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+
+                const btn = document.createElement('button');
+                btn.className = 'absolute top-2 right-2 bg-orbita-surface border border-orbita-border shadow-sm px-2 py-1 rounded-lg text-xs font-medium text-orbita-secondary hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity';
+                btn.innerHTML = '<i class="fa-solid fa-file-csv mr-1"></i>Excel';
+                btn.onclick = () => downloadTableAsCSV(table);
+                wrapper.appendChild(btn);
+            });
+        }
+
+        window.copyCode = (btn) => {
+            const code = btn.closest('.code-wrapper').querySelector('code').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                const i = btn.querySelector('i'); i.className = 'fa-solid fa-check text-green-400';
+                setTimeout(()=>i.className='fa-regular fa-copy', 1500);
+            });
+        };
+
+        window.downloadCode = (btn, lang) => {
+            const code = btn.closest('.code-wrapper').querySelector('code').innerText;
+            const extMap = { javascript: 'js', python: 'py', html: 'html', css: 'css', json: 'json', java: 'java', cpp: 'cpp' };
+            const ext = extMap[lang] || 'txt';
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `code_${Date.now()}.${ext}`;
+            a.click(); URL.revokeObjectURL(url);
+        };
+
+        window.downloadTableAsCSV = (table) => {
+            let csv = [];
+            const rows = table.querySelectorAll("tr");
+            for (let i = 0; i < rows.length; i++) {
+                const row = [], cols = rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+                csv.push(row.join(","));
+            }
+            const blob = new Blob(["\ufeff" + csv.join("\n")], { type: "text/csv;charset=utf-8;" }); 
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `table_${Date.now()}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+        };
+
+        window.downloadNotes = () => {
+            const text = document.getElementById('notesArea').value;
+            if(!text) { alert('Заметки пусты!'); return; }
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `notes_${Date.now()}.txt`;
+            a.click(); URL.revokeObjectURL(url);
+        }
+
+        async function handleAiSubmit(isFullChat = false) {
+            const inputEl = isFullChat ? document.getElementById('fullChatInput') : document.getElementById('aiInput');
+            const loaderEl = isFullChat ? document.getElementById('fullChatLoader') : document.getElementById('aiLoader');
+            const txtOutEl = document.getElementById('aiOutput');
+            const imgEl = document.getElementById('generatedImage');
+            const resContEl = document.getElementById('aiResultContainer');
+
+            const promptText = inputEl.value;
+            const currentImg = state.currentImageBase64;
+            const currentMime = state.currentImageMime;
+
+            if(!promptText && !currentImg) return;
+            
+            // Validate API Key
+            const apiKeyToUse = state.settings.apiKey;
+            if (!apiKeyToUse) {
+                const errorMsg = "Пожалуйста, укажите API Key в настройках.";
+                alert(errorMsg); // Simple alert for missing key
+                return;
+            }
+            
+            state.chatHistory.push({role: 'user', text: promptText, image: currentImg ? `data:${currentMime};base64,${currentImg}` : null});
+
+            clearFile(); inputEl.value = '';
+            
+            if (isFullChat) { renderChatHistory(); } 
+            else { resContEl.classList.remove('hidden'); txtOutEl.classList.add('hidden'); imgEl.classList.add('hidden'); }
+            loaderEl.classList.remove('hidden');
+
+            try {
+                const lowerPrompt = promptText.toLowerCase();
+                const isImageGen = lowerPrompt.includes('нарисуй') || lowerPrompt.includes('создай фото') || lowerPrompt.includes('image');
+
+                let replyText = '';
+                let generatedImageBase64 = null;
+
+                if (isImageGen && !currentImg) {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKeyToUse}`, {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({ instances: [{ prompt: promptText }], parameters: { sampleCount: 1 } })
+                    });
+                    const d = await res.json();
+                    if(d.predictions?.[0]?.bytesBase64Encoded) {
+                         generatedImageBase64 = d.predictions[0].bytesBase64Encoded;
+                         replyText = 'Изображение создано.';
+                         if(!isFullChat) {
+                            imgEl.src = `data:image/png;base64,${generatedImageBase64}`; imgEl.classList.remove('hidden');
+                            txtOutEl.innerHTML = replyText; txtOutEl.classList.remove('hidden');
+                         }
+                    } else { throw new Error('Не удалось создать фото. Проверьте API ключ.'); }
+                } else {
+                    let parts = [{ text: promptText }];
+                    if (currentImg) {
+                        parts.push({ 
+                            inlineData: { 
+                                mimeType: currentMime, 
+                                data: currentImg 
+                            } 
+                        });
+                    }
+
+                    const systemPrompt = isFullChat ? "You are a helpful AI. Answer in Russian." : "You are a concise AI. Answer in Russian under 50 words.";
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKeyToUse}`, {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({ contents: [{ parts: parts }], systemInstruction: { parts: [{ text: systemPrompt }] } })
+                    });
+                    
+                    if (!res.ok) {
+                        const errorData = await res.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || res.statusText);
+                    }
+                    
+                    const d = await res.json();
+                    replyText = d.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!replyText) {
+                         console.error(d);
+                         throw new Error(d.error?.message || 'Пустой ответ API.');
+                    }
+
+                    if(!isFullChat) {
+                        // Added DOMPurify for security
+                        const cleanHtml = DOMPurify.sanitize(marked.parse(replyText));
+                        txtOutEl.innerHTML = cleanHtml; 
+                        decorateAiContent(txtOutEl); 
+                        txtOutEl.classList.remove('hidden');
+                    }
+                }
+                
+                state.chatHistory.push({ role: 'model', text: replyText, image: generatedImageBase64 ? `data:image/png;base64,${generatedImageBase64}` : null });
+                saveData('chat');
+            } catch(e) {
+                // INTELLIGENT ERROR TRANSLATION
+                let errorMsg = e.message || "Неизвестная ошибка";
+                let friendlyMsg = "";
+
+                if (errorMsg.includes('key reported') || errorMsg.includes('API key not valid')) {
+                    friendlyMsg = "⚠️ <b>Ошибка ключа:</b> Ваш API ключ заблокирован или недействителен. Пожалуйста, сгенерируйте новый ключ в Google AI Studio.";
+                } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+                    friendlyMsg = "⏳ <b>Лимит исчерпан:</b> Слишком много запросов. Подождите минуту.";
+                } else if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                    friendlyMsg = "🌐 <b>Ошибка сети:</b> Нет соединения. Если вы в РФ, <b>включите VPN</b>.";
+                } else if (errorMsg.includes('permission denied') || errorMsg.includes('403')) {
+                    friendlyMsg = "⛔ <b>Доступ запрещен:</b> Возможно, сервис недоступен в вашем регионе (нужен VPN).";
+                } else {
+                    friendlyMsg = `❌ <b>Ошибка:</b> ${errorMsg}`;
+                }
+
+                if(!isFullChat) { txtOutEl.innerHTML = friendlyMsg; txtOutEl.classList.remove('hidden'); }
+                state.chatHistory.push({role: 'model', text: friendlyMsg});
+                saveData('chat');
+            } finally { 
+                loaderEl.classList.add('hidden'); 
+                if (isFullChat || document.getElementById('fullChatOverlay').classList.contains('hidden') === false) { renderChatHistory(); }
+            }
+        }
+
+        function toggleFullChat() {
+            const el = document.getElementById('fullChatOverlay');
+            if(el.classList.contains('hidden')) { el.classList.remove('hidden'); renderChatHistory(); document.getElementById('fullChatInput').focus(); } 
+            else { el.classList.add('hidden'); }
+        }
+        
+        function renderChatHistory() {
+            const msgContainer = document.getElementById('chatMessages');
+            const emptyState = document.getElementById('chatEmptyState');
+            const loader = document.getElementById('fullChatLoader');
+            
+            msgContainer.innerHTML = '';
+            
+            // Logic: If NO messages, show Empty State. If messages exist, hide it.
+            if (state.chatHistory.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                
+                state.chatHistory.forEach(msg => {
+                    const isUser = msg.role === 'user';
+                    const contentHtml = msg.text ? (isUser ? msg.text : DOMPurify.sanitize(marked.parse(msg.text))) : '';
+                    
+                    const messageHtml = `
+                        <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-fade-in">
+                            ${msg.image ? `<img src="${msg.image}" class="chat-image ${isUser ? 'ml-auto' : 'mr-auto'} border border-orbita-border/30">` : ''}
+                            ${msg.text ? 
+                            `<div class="${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'} px-5 py-3 text-sm shadow-sm mt-1 group">
+                                    <div class="chat-content leading-relaxed">${contentHtml}</div>
+                                </div>` : ''}
+                        </div>
+                    `;
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = messageHtml;
+                    if(!isUser) decorateAiContent(tempDiv);
+                    msgContainer.appendChild(tempDiv.firstElementChild);
+                });
+            }
+            // Auto scroll
+            const container = document.getElementById('chatHistoryContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function handleFullChatSubmit() {
+            const input = document.getElementById('fullChatInput');
+            const text = input.value;
+            if(!text && !state.currentImageBase64) return;
+            await handleAiSubmit(true);
+        }
+
+        function clearChatHistory() { 
+            if(confirm('Удалить чат?')) { 
+                state.chatHistory=[]; 
+                saveData('chat'); 
+                renderChatHistory(); // This now correctly shows the empty state because we don't wipe the parent
+            } 
+        }
+
+        // --- UTILS ---
+        window.toggleFocusMode = () => { document.getElementById('focusOverlay').classList.toggle('hidden'); };
+        function formatTime(s) { return new Date(s * 1000).toISOString().substr(11, 8).replace(/^00:/, ''); }
+        function updateTimerDisplay(s) {
+             document.getElementById('timerDisplay').innerText = formatTime(s);
+             const pct = state.timer.initial > 0 ? s/state.timer.initial : 0;
+             document.getElementById('timerProgress').style.strokeDashoffset = 289 - (pct*289);
+        }
+        window.adjustTimer = (m) => {
+            if(state.timer.active) return;
+            let ns = state.timer.time + (m*60); if(ns<300) ns=300;
+            state.timer.time = ns; state.timer.initial = ns; updateTimerDisplay(ns);
+        };
+        window.timerAction = (act) => {
+            const btn = document.getElementById('timerStartBtn');
+            if(act==='start') {
+                if(state.timer.active) { clearInterval(state.timer.interval); state.timer.active=false; btn.innerText='Продолжить'; } 
+                else {
+                    state.timer.active=true; btn.innerText='Пауза';
+                    state.timer.interval = setInterval(()=>{ state.timer.time--; updateTimerDisplay(state.timer.time); if(state.timer.time<=0) timerAction('reset'); },1000);
+                }
+            } else {
+                clearInterval(state.timer.interval); state.timer.active=false; state.timer.time=state.timer.initial; updateTimerDisplay(state.timer.initial); btn.innerText='Старт';
+            }
+        };
+
+        document.getElementById('searchForm').addEventListener('submit', (e) => {
+            e.preventDefault(); const val = document.getElementById('searchInput').value; if(!val) return;
+            if(/^(http|www)/.test(val) || val.includes('.')) { window.location.href = val.startsWith('http') ? val : 'https://'+val; return; }
+            const enc = encodeURIComponent(val);
+            let url = `https://www.google.com/search?q=${enc}`;
+            if(state.settings.searchEngine==='yandex') url = `https://yandex.ru/search/?text=${enc}`;
+            if(state.settings.searchEngine==='bing') url = `https://www.bing.com/search?q=${enc}`;
+            if(state.settings.searchEngine==='ddg') url = `https://duckduckgo.com/?q=${enc}`;
+            window.location.href = url;
+        });
+
+        function promptNewCategory() { const n = prompt("Имя категории:"); if(n) { state.categories.push({id: 'cat_'+Date.now(), label: n}); saveData('cats'); renderUI(); } }
+        
+        // Delete Category Function
+        window.deleteCategory = (id, event) => {
+            event.stopPropagation(); // Prevent triggering category selection
+            if(confirm('Удалить эту категорию? Ресурсы останутся, но будут без категории.')) {
+                state.categories = state.categories.filter(c => c.id !== id);
+                if(state.category === id) state.category = 'all';
+                saveData('cats');
+                renderUI();
+            }
+        };
+
+        function refreshQuote() {
+             const q = [
+                "Простота — залог успеха.", 
+                "Действуй.", 
+                "Идеи правят миром.", 
+                "Меньше шума, больше дела.", 
+                "Создавай будущее.", 
+                "Код — это искусство.",
+                "Не бойся ошибаться.",
+                "Каждый день — новый старт.",
+                "Стремись к лучшему.",
+                "Мечтай и делай.",
+                "Знание — сила.",
+                "Всё возможно.",
+                "Будь смелым.",
+                "Учись непрерывно.",
+                "Дисциплина — это свобода."
+             ];
+             document.getElementById('dailyQuote').innerText = q[Math.floor(Math.random()*q.length)];
+        }
+        
+        function setupDragAndDrop() {
+            const grid = document.getElementById('resourceGrid');
+            grid.addEventListener('dragover', e => { e.preventDefault(); const after = getDragAfterElement(grid, e.clientY, e.clientX); const drg = document.querySelector('.dragging'); if(!after) grid.appendChild(drg); else grid.insertBefore(drg, after); });
+        }
+        function getDragAfterElement(container, y, x) {
+            const draggables = [...container.querySelectorAll('.resource-card:not(.dragging)')];
+            return draggables.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = x - box.left - box.width / 2;
+                if(offset < 0 && offset > closest.offset) return { offset: offset, element: child }; else return closest;
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+        
+        function toggleSidePanel() { document.getElementById('sidePanel').classList.toggle('translate-x-full'); }
+        function switchTab(tab) {
+            document.getElementById('viewNotes').classList.toggle('hidden', tab !== 'notes');
+            document.getElementById('viewTodos').classList.toggle('hidden', tab !== 'todos');
+            document.getElementById('viewTodos').classList.toggle('flex', tab === 'todos');
+            const tabN = document.getElementById('tabNotes'); const tabT = document.getElementById('tabTodos');
+            tabN.className = `flex-1 py-3 text-xs font-bold uppercase tracking-wide border-b-2 transition-colors ${tab === 'notes' ? 'border-accent text-accent' : 'border-transparent text-orbita-secondary'}`;
+            tabT.className = `flex-1 py-3 text-xs font-bold uppercase tracking-wide border-b-2 transition-colors ${tab === 'todos' ? 'border-accent text-accent' : 'border-transparent text-orbita-secondary'}`;
+        }
+        
+        document.getElementById('todoForm').addEventListener('submit', (e) => { e.preventDefault(); const val=document.getElementById('todoInput').value; if(val) { state.todos.unshift({id:Date.now(), text:val, done:false}); saveData('todos'); renderUI(); document.getElementById('todoInput').value=''; }});
+        window.toggleTodo = (id) => { const t=state.todos.find(x=>x.id===id); if(t){t.done=!t.done; saveData('todos'); renderUI();} };
+        window.deleteTodo = (id) => { state.todos=state.todos.filter(x=>x.id!==id); saveData('todos'); renderUI(); };
+        window.clearCompletedTodos = () => { state.todos=state.todos.filter(t=>!t.done); saveData('todos'); renderUI(); };
+        document.getElementById('notesArea').addEventListener('input', () => saveData('notes'));
+        function updateHubIndicator() { const has = document.getElementById('notesArea').value.length > 0 || state.todos.some(t => !t.done); const el = document.getElementById('hubIndicator'); if(has) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+
+        function toggleEditMode() { state.editMode = !state.editMode; document.getElementById('editModeBtn').classList.toggle('text-accent', state.editMode); renderUI(); }
+        function setCategory(id) { state.category = id; if(id !== 'all' && state.editMode) toggleEditMode(); renderUI(); }
+        window.deleteResource = (id) => { if(confirm('Удалить?')) { state.resources = state.resources.filter(r=>r.id!==id); saveData('res'); renderUI(); } };
+        window.autoFillTitle = () => { const val = document.getElementById('resUrl').value; if(val && !document.getElementById('resTitle').value) { try { document.getElementById('resTitle').value = new URL(val).hostname.replace('www.','').split('.')[0]; } catch(e){} } };
+
+        window.openModal = () => document.getElementById('addModal').classList.remove('hidden');
+        window.closeModal = () => document.getElementById('addModal').classList.add('hidden');
+        
+        document.getElementById('addResourceForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const urlVal = document.getElementById('resUrl').value;
+            let iconVal = 'fa-solid fa-globe';
+            try {
+                const domain = new URL(urlVal).hostname;
+                iconVal = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            } catch(err) {}
+
+            state.resources.push({ 
+                id:Date.now(), 
+                title:document.getElementById('resTitle').value, 
+                url:urlVal, 
+                category:document.getElementById('resCategory').value, 
+                icon: iconVal 
+            });
+            saveData('res'); renderUI(); closeModal(); e.target.reset();
+        });
+        
+        window.openSettings = () => document.getElementById('settingsModal').classList.remove('hidden');
+        window.closeSettings = () => document.getElementById('settingsModal').classList.add('hidden');
+        
+        window.exportData = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify({res:state.resources, set:state.settings, todos:state.todos, notes:document.getElementById('notesArea').value, cats:state.categories, chat:state.chatHistory})], {type:'application/json'})); a.download = 'orbita_backup.json'; a.click(); }
+        window.importData = (input) => { 
+             const r = new FileReader(); 
+             r.onload = (e) => { 
+                const d = JSON.parse(e.target.result); 
+                if(d.res)localStorage.setItem(KEYS.RES,JSON.stringify(d.res)); 
+                if(d.set)localStorage.setItem(KEYS.SET,JSON.stringify(d.set)); 
+                if(d.todos)localStorage.setItem(KEYS.TODOS,JSON.stringify(d.todos)); 
+                if(d.notes)localStorage.setItem(KEYS.NOTES,d.notes); 
+                if(d.cats)localStorage.setItem(KEYS.CATS,JSON.stringify(d.cats)); 
+                if(d.chat)localStorage.setItem(KEYS.CHAT,JSON.stringify(d.chat)); 
+                location.reload(); 
+             }; 
+             r.readAsText(input.files[0]); 
+        }
+        
+        document.querySelectorAll('.resource-card').forEach(c => { c.addEventListener('dragstart', e=>{e.target.classList.add('dragging');}); c.addEventListener('dragend', e=>{e.target.classList.remove('dragging'); handleDrop();}); });
+        function handleDrop() { if(state.category!=='all')return; const newO=[]; document.querySelectorAll('.resource-card').forEach(el=>{const id=parseInt(el.getAttribute('data-id')); const r=state.resources.find(x=>x.id===id); if(r)newO.push(r);}); state.resources=newO; saveData('res'); }
+    </script>
+</body>
+</html>
