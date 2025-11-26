@@ -8,6 +8,7 @@
   "background_color": "#FDFCF8",
   "theme_color": "",
   "orientation": "portrait",
+  "id": "io.github.akario_dev.twa",
       "icons": [
     {
       "src": "windows11/SmallTile.scale-100.png",
@@ -474,4 +475,5 @@
   "ms_start_url": "./index.html",
 
   "prefer_related_applications": false
+
 }
