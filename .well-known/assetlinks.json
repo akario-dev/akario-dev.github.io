@@ -1,1 +1,8 @@
-
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.akario_dev.twa",
+        "sha256_cert_fingerprints": ["54:DB:6B:E6:CB:C8:4F:4E:7A:4B:05:65:3B:BA:3F:D7:02:FD:15:24:B2:6C:1D:9B:73:27:C2:08:BE:C8:4E:70"]
+      }
+    }]
