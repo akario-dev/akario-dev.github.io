@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "io.github.akario_dev.twa",
-        "sha256_cert_fingerprints": ["54:DB:6B:E6:CB:C8:4F:4E:7A:4B:05:65:3B:BA:3F:D7:02:FD:15:24:B2:6C:1D:9B:73:27:C2:08:BE:C8:4E:70"]
+        "sha256_cert_fingerprints": ["33:F6:27:94:87:F0:12:15:78:74:12:1A:66:64:12:4F:12:DB:3D:90:E1:5D:AF:F9:A7:F6:0B:E8:61:2D:89:27"]
       }
     }]
