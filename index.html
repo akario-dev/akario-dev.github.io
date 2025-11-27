@@ -715,6 +715,12 @@
             }, 4000);
         });
 
+        // FIX: Clear search on back navigation (bfcache)
+        window.addEventListener('pageshow', () => {
+             const searchInput = document.getElementById('searchInput');
+             if (searchInput) searchInput.value = '';
+        });
+
         function updateSmartClock() {
             setInterval(() => {
                 const btn = document.getElementById('smartClockText');
@@ -1093,10 +1099,11 @@
                     const iconHtml = isUrlIcon 
                         ? `<img src="${res.icon}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='';this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')"><i class="fa-solid fa-globe text-xl hidden"></i>` 
                         : `<i class="${res.icon || 'fa-solid fa-globe'} text-xl"></i>`;
-                        
+                    
+                    // FIX: Removed target="_blank" to ensure proper in-app/CCT navigation in TWA
                     return `
                     <div class="relative group resource-card select-none" data-id="${res.id}">
-                        <a href="${res.url}" target="_blank" class="block h-full cozy-card p-2 sm:p-4 hover:border-accent transition-all flex flex-col items-center text-center gap-1.5 sm:gap-3 active:scale-95 cursor-pointer">
+                        <a href="${res.url}" class="block h-full cozy-card p-2 sm:p-4 hover:border-accent transition-all flex flex-col items-center text-center gap-1.5 sm:gap-3 active:scale-95 cursor-pointer">
                             <div class="w-8 h-8 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-orbita-text group-hover:text-accent transition-all overflow-hidden p-0 text-sm sm:text-base pointer-events-none">
                                 ${iconHtml}
                             </div>
